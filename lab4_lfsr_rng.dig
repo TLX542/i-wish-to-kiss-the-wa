@@ -238,11 +238,11 @@ TODO: replace seed 0x9356 with your own last 4 student-ID digits.</string>
 
   <wires>
     <wire><p1 x="80" y="220"/><p2 x="400" y="220"/></wire>
-    <wire><p1 x="80" y="220"/><p2 x="600" y="420"/></wire>
+    <wire><p1 x="80" y="220"/><p2 x="600" y="400"/></wire>
 
     <wire><p1 x="100" y="260"/><p2 x="100" y="280"/></wire>
     <wire><p1 x="100" y="260"/><p2 x="420" y="260"/></wire>
-    <wire><p1 x="100" y="260"/><p2 x="620" y="420"/></wire>
+    <wire><p1 x="100" y="260"/><p2 x="600" y="420"/></wire>
 
     <wire><p1 x="80" y="140"/><p2 x="280" y="160"/></wire>
 
