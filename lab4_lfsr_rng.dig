@@ -9,7 +9,8 @@
 - BUTTON0 clock advances the generator
 - 3-bit shift register stores shifted-out bits and feeds a 7-seg hex display
 - LOAD_SEED=1 loads the seed constant on next clock edge
-(Seed default is the example from assignment: 0x9356; replace with your own last 4 student-ID digits.)</string>
+ - Splitter output 15-1 is only for rebuilding the shifted register body (not an extra tap)
+TODO: replace seed 0x9356 with your own last 4 student-ID digits.</string>
     </entry>
     <entry>
       <string>Width</string>
