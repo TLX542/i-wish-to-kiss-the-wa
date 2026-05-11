@@ -1,0 +1,282 @@
+<?xml version="1.0" encoding="utf-8"?>
+<circuit>
+  <version>2</version>
+  <attributes>
+    <entry>
+      <string>Description</string>
+      <string>CS303 Lab 4 pre-lab: 16-bit LFSR pseudo-random generator.
+- LFSR taps: bit0, bit1, bit2, bit7
+- BUTTON0 clock advances the generator
+- 3-bit shift register stores shifted-out bits and feeds a 7-seg hex display
+- LOAD_SEED=1 loads the seed constant on next clock edge
+(Seed default is the example from assignment: 0x9356; replace with your own last 4 student-ID digits.)</string>
+    </entry>
+    <entry>
+      <string>Width</string>
+      <int>4</int>
+    </entry>
+  </attributes>
+  <visualElements>
+    <visualElement>
+      <elementName>Clock</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>BUTTON0</string>
+        </entry>
+      </elementAttributes>
+      <pos x="80" y="220"/>
+    </visualElement>
+
+    <visualElement>
+      <elementName>In</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>LOAD_SEED</string>
+        </entry>
+      </elementAttributes>
+      <pos x="80" y="140"/>
+    </visualElement>
+
+    <visualElement>
+      <elementName>VDD</elementName>
+      <elementAttributes/>
+      <pos x="100" y="280"/>
+    </visualElement>
+
+    <visualElement>
+      <elementName>Const</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Bits</string>
+          <int>16</int>
+        </entry>
+        <entry>
+          <string>Value</string>
+          <long>37718</long>
+        </entry>
+      </elementAttributes>
+      <pos x="160" y="220"/>
+    </visualElement>
+
+    <visualElement>
+      <elementName>Multiplexer</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Bits</string>
+          <int>16</int>
+        </entry>
+      </elementAttributes>
+      <pos x="260" y="180"/>
+    </visualElement>
+
+    <visualElement>
+      <elementName>Register</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Bits</string>
+          <int>16</int>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>LFSR</string>
+        </entry>
+        <entry>
+          <string>valueIsProbe</string>
+          <boolean>true</boolean>
+        </entry>
+      </elementAttributes>
+      <pos x="420" y="180"/>
+    </visualElement>
+
+    <visualElement>
+      <elementName>Splitter</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Input Splitting</string>
+          <string>16</string>
+        </entry>
+        <entry>
+          <string>Output Splitting</string>
+          <string>0-0,1-1,2-2,7-7,15-1</string>
+        </entry>
+      </elementAttributes>
+      <pos x="520" y="200"/>
+    </visualElement>
+
+    <visualElement>
+      <elementName>XOr</elementName>
+      <elementAttributes/>
+      <pos x="600" y="200"/>
+    </visualElement>
+
+    <visualElement>
+      <elementName>XOr</elementName>
+      <elementAttributes/>
+      <pos x="600" y="260"/>
+    </visualElement>
+
+    <visualElement>
+      <elementName>XOr</elementName>
+      <elementAttributes/>
+      <pos x="680" y="230"/>
+    </visualElement>
+
+    <visualElement>
+      <elementName>Splitter</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Input Splitting</string>
+          <string>1,15</string>
+        </entry>
+        <entry>
+          <string>Output Splitting</string>
+          <string>16</string>
+        </entry>
+      </elementAttributes>
+      <pos x="760" y="200"/>
+    </visualElement>
+
+    <visualElement>
+      <elementName>Register</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Bits</string>
+          <int>3</int>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>RAND3</string>
+        </entry>
+        <entry>
+          <string>valueIsProbe</string>
+          <boolean>true</boolean>
+        </entry>
+      </elementAttributes>
+      <pos x="620" y="380"/>
+    </visualElement>
+
+    <visualElement>
+      <elementName>Splitter</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Input Splitting</string>
+          <string>3</string>
+        </entry>
+        <entry>
+          <string>Output Splitting</string>
+          <string>2-1,0-0</string>
+        </entry>
+      </elementAttributes>
+      <pos x="720" y="400"/>
+    </visualElement>
+
+    <visualElement>
+      <elementName>Splitter</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Input Splitting</string>
+          <string>2,1</string>
+        </entry>
+        <entry>
+          <string>Output Splitting</string>
+          <string>3</string>
+        </entry>
+      </elementAttributes>
+      <pos x="540" y="380"/>
+    </visualElement>
+
+    <visualElement>
+      <elementName>Splitter</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Input Splitting</string>
+          <string>3,1</string>
+        </entry>
+        <entry>
+          <string>Output Splitting</string>
+          <string>4</string>
+        </entry>
+      </elementAttributes>
+      <pos x="820" y="380"/>
+    </visualElement>
+
+    <visualElement>
+      <elementName>Ground</elementName>
+      <elementAttributes/>
+      <pos x="780" y="440"/>
+    </visualElement>
+
+    <visualElement>
+      <elementName>Seven-Seg-Hex</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Size</string>
+          <int>0</int>
+        </entry>
+      </elementAttributes>
+      <pos x="900" y="300"/>
+    </visualElement>
+
+    <visualElement>
+      <elementName>Out</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>RND</string>
+        </entry>
+        <entry>
+          <string>Bits</string>
+          <int>3</int>
+        </entry>
+      </elementAttributes>
+      <pos x="860" y="420"/>
+    </visualElement>
+  </visualElements>
+
+  <wires>
+    <wire><p1 x="80" y="220"/><p2 x="400" y="220"/></wire>
+    <wire><p1 x="80" y="220"/><p2 x="600" y="420"/></wire>
+
+    <wire><p1 x="100" y="260"/><p2 x="100" y="280"/></wire>
+    <wire><p1 x="100" y="260"/><p2 x="420" y="260"/></wire>
+    <wire><p1 x="100" y="260"/><p2 x="620" y="420"/></wire>
+
+    <wire><p1 x="80" y="140"/><p2 x="280" y="160"/></wire>
+
+    <wire><p1 x="160" y="220"/><p2 x="260" y="220"/></wire>
+
+    <wire><p1 x="780" y="200"/><p2 x="260" y="180"/></wire>
+    <wire><p1 x="300" y="200"/><p2 x="420" y="180"/></wire>
+
+    <wire><p1 x="480" y="200"/><p2 x="520" y="200"/></wire>
+    <wire><p1 x="540" y="200"/><p2 x="600" y="200"/></wire>
+    <wire><p1 x="540" y="220"/><p2 x="600" y="240"/></wire>
+    <wire><p1 x="540" y="240"/><p2 x="600" y="260"/></wire>
+    <wire><p1 x="540" y="260"/><p2 x="600" y="300"/></wire>
+
+    <wire><p1 x="680" y="220"/><p2 x="680" y="250"/></wire>
+    <wire><p1 x="680" y="280"/><p2 x="680" y="290"/></wire>
+    <wire><p1 x="760" y="250"/><p2 x="680" y="250"/></wire>
+
+    <wire><p1 x="760" y="200"/><p2 x="720" y="250"/></wire>
+    <wire><p1 x="760" y="280"/><p2 x="540" y="280"/></wire>
+
+    <wire><p1 x="720" y="250"/><p2 x="760" y="250"/></wire>
+    <wire><p1 x="540" y="280"/><p2 x="760" y="280"/></wire>
+
+    <wire><p1 x="540" y="200"/><p2 x="520" y="380"/></wire>
+
+    <wire><p1 x="560" y="380"/><p2 x="620" y="380"/></wire>
+    <wire><p1 x="640" y="400"/><p2 x="720" y="400"/></wire>
+    <wire><p1 x="740" y="420"/><p2 x="820" y="420"/></wire>
+    <wire><p1 x="640" y="420"/><p2 x="860" y="420"/></wire>
+
+    <wire><p1 x="820" y="380"/><p2 x="880" y="380"/></wire>
+    <wire><p1 x="780" y="420"/><p2 x="820" y="420"/></wire>
+    <wire><p1 x="780" y="420"/><p2 x="780" y="440"/></wire>
+  </wires>
+
+  <measurementOrdering/>
+</circuit>
