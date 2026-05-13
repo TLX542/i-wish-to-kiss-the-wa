@@ -134,49 +134,299 @@ void run(char* code, char* heap) {
 
 // YOUR CODE STARTS HERE
 
+// Internal constants/helpers kept inside the editable region.
+#define PAGE_WORDS 2048
+#define PAGE_COUNT 32
+#define VPN_BITS 5
+#define OFFSET_MASK 0x7FF
+#define PTE_VALID 0x1
+#define PTE_READ 0x2
+#define PTE_WRITE 0x4
+#define PCB_START 12
+#define PCB_FIELDS 3
+#define PCB_PID 0
+#define PCB_PC 1
+#define PCB_PTBR 2
+#define VPN_CODE0 6
+#define VPN_CODE1 7
+#define VPN_HEAP0 8
+#define VPN_HEAP1 9
+#define PT_REGION_START 4096
+#define PT_ENTRIES 32
+#define MAX_PROCS (PAGE_WORDS / PT_ENTRIES)
+#define PTBR RBSC
+
+static inline uint16_t pcb_addr(uint16_t pid) { return PCB_START + (pid * PCB_FIELDS); }
+static inline uint16_t ptbr_of_pid(uint16_t pid) { return PT_REGION_START + (pid * PT_ENTRIES); }
+static inline uint16_t pte_get(uint16_t ptbr, uint16_t vpn) { return mem[ptbr + vpn]; }
+static inline void pte_set(uint16_t ptbr, uint16_t vpn, uint16_t pte) { mem[ptbr + vpn] = pte; }
+static inline uint16_t pte_pfn(uint16_t pte) { return (pte >> 11) & 0x1F; }
+static inline uint16_t pte_valid(uint16_t pte) { return pte & PTE_VALID; }
+static inline uint16_t pte_readable(uint16_t pte) { return pte & PTE_READ; }
+static inline uint16_t pte_writable(uint16_t pte) { return pte & PTE_WRITE; }
+
+static inline uint32_t get_bitmap() {
+    return (((uint32_t)mem[3]) << 16) | (uint32_t)mem[4];
+}
+
+static inline void set_bitmap(uint32_t bitmap) {
+    mem[3] = (uint16_t)((bitmap >> 16) & 0xFFFF);
+    mem[4] = (uint16_t)(bitmap & 0xFFFF);
+}
+
+static inline uint16_t pfn_is_free(uint16_t pfn) {
+    uint32_t bitmap = get_bitmap();
+    return (bitmap >> (31 - pfn)) & 1U;
+}
+
+static inline void mark_pfn_free(uint16_t pfn, uint16_t is_free) {
+    uint32_t bitmap = get_bitmap();
+    uint32_t bit = 1U << (31 - pfn);
+    if (is_free) bitmap |= bit;
+    else bitmap &= ~bit;
+    set_bitmap(bitmap);
+}
+
+static inline int find_first_free_pfn() {
+    for (int pfn = 0; pfn < PAGE_COUNT; ++pfn) {
+        if (pfn_is_free((uint16_t)pfn)) return pfn;
+    }
+    return -1;
+}
+
+static inline uint16_t has_any_free_pfn() {
+    return get_bitmap() != 0;
+}
+
+static inline uint16_t resolve_va(uint16_t va, uint16_t for_write) {
+    uint16_t vpn = (va >> 11) & 0x1F;
+    uint16_t off = va & OFFSET_MASK;
+
+    if (vpn < 6) {
+        fprintf(stdout, "Segmentation fault.\n");
+        exit(1);
+    }
+
+    uint16_t pte = pte_get(reg[PTBR], vpn);
+    if (!pte_valid(pte)) {
+        fprintf(stdout, "Segmentation fault inside free space.\n");
+        exit(1);
+    }
+
+    if (for_write) {
+        if (!pte_writable(pte)) {
+            fprintf(stdout, "Cannot write to a read-only page.\n");
+            exit(1);
+        }
+    } else {
+        if (!pte_readable(pte)) {
+            fprintf(stdout, "Cannot read the page.\n");
+            exit(1);
+        }
+    }
+
+    return (uint16_t)((pte_pfn(pte) << 11) | off);
+}
+
+static inline void load_obj_into_two_pages(char *fname, uint16_t pfn0, uint16_t pfn1) {
+    FILE *in = fopen(fname, "rb");
+    if (NULL == in) {
+        fprintf(stderr, "Cannot open file %s.\n", fname);
+        exit(1);
+    }
+    fread(mem + (pfn0 * PAGE_WORDS), sizeof(uint16_t), PAGE_WORDS, in);
+    fread(mem + (pfn1 * PAGE_WORDS), sizeof(uint16_t), PAGE_WORDS, in);
+    fclose(in);
+}
+
+static inline uint16_t allocMem_impl(uint16_t ptbr, uint16_t vpn, uint16_t read, uint16_t write) {
+    uint16_t old = pte_get(ptbr, vpn);
+    if (pte_valid(old)) return 0;
+
+    int pfn = find_first_free_pfn();
+    if (pfn < 0) return 0;
+
+    uint16_t pte = (uint16_t)((((uint16_t)pfn) << 11) |
+                              ((write == UINT16_MAX) ? PTE_WRITE : 0) |
+                              ((read == UINT16_MAX) ? PTE_READ : 0) |
+                              PTE_VALID);
+    pte_set(ptbr, vpn, pte);
+    mark_pfn_free((uint16_t)pfn, 0);
+    return 1;
+}
+
+static inline int freeMem_impl(uint16_t vpn, uint16_t ptbr) {
+    uint16_t pte = pte_get(ptbr, vpn);
+    if (!pte_valid(pte)) return 0;
+    mark_pfn_free(pte_pfn(pte), 1);
+    pte_set(ptbr, vpn, (uint16_t)(pte & (uint16_t)~PTE_VALID));
+    return 1;
+}
+
+static inline int next_runnable_pid(uint16_t from_pid) {
+    uint16_t nproc = mem[Proc_Count];
+    if (nproc == 0) return -1;
+    for (uint16_t step = 1; step <= nproc; ++step) {
+        uint16_t pid = (uint16_t)((from_pid + step) % nproc);
+        uint16_t paddr = pcb_addr(pid);
+        if (mem[paddr + PCB_PID] != 0xFFFF) return pid;
+    }
+    return -1;
+}
+
 void initOS() {
+    mem[Cur_Proc_ID] = 0xFFFF;
+    mem[Proc_Count] = 0;
+    mem[OS_STATUS] = 0x0000;
+    set_bitmap(0xFFFFFFFF);
+    mark_pfn_free(0, 0);
+    mark_pfn_free(1, 0);
+    mark_pfn_free(2, 0);
     return;
 }
 
 // process functions to implement
 int createProc(char *fname, char* hname) {
+    uint16_t pid = mem[Proc_Count];
+    if (pid >= MAX_PROCS || (pcb_addr(pid) + PCB_FIELDS - 1) >= OS_MEM_SIZE) {
+        mem[OS_STATUS] |= 0x1;
+        fprintf(stdout, "The OS memory region is full. Cannot create a new PCB.\n");
+        return 0;
+    }
+
+    uint16_t paddr = pcb_addr(pid);
+    uint16_t ptbr = ptbr_of_pid(pid);
+
+    mem[paddr + PCB_PID] = pid;
+    mem[paddr + PCB_PC] = PC_START;
+    mem[paddr + PCB_PTBR] = ptbr;
+
+    if (!allocMem_impl(ptbr, VPN_CODE0, UINT16_MAX, 0) ||
+        !allocMem_impl(ptbr, VPN_CODE1, UINT16_MAX, 0)) {
+        freeMem_impl(VPN_CODE0, ptbr);
+        freeMem_impl(VPN_CODE1, ptbr);
+        mem[paddr + PCB_PID] = 0xFFFF;
+        fprintf(stdout, "Cannot create code segment.\n");
+        return 0;
+    }
+
+    if (!allocMem_impl(ptbr, VPN_HEAP0, UINT16_MAX, UINT16_MAX) ||
+        !allocMem_impl(ptbr, VPN_HEAP1, UINT16_MAX, UINT16_MAX)) {
+        freeMem_impl(VPN_CODE0, ptbr);
+        freeMem_impl(VPN_CODE1, ptbr);
+        freeMem_impl(VPN_HEAP0, ptbr);
+        freeMem_impl(VPN_HEAP1, ptbr);
+        mem[paddr + PCB_PID] = 0xFFFF;
+        fprintf(stdout, "Cannot create heap segment.\n");
+        return 0;
+    }
+
+    load_obj_into_two_pages(fname,
+                            pte_pfn(pte_get(ptbr, VPN_CODE0)),
+                            pte_pfn(pte_get(ptbr, VPN_CODE1)));
+    load_obj_into_two_pages(hname,
+                            pte_pfn(pte_get(ptbr, VPN_HEAP0)),
+                            pte_pfn(pte_get(ptbr, VPN_HEAP1)));
+
+    mem[Proc_Count] = pid + 1;
+    if (mem[Proc_Count] >= MAX_PROCS || (pcb_addr(mem[Proc_Count]) + PCB_FIELDS - 1) >= OS_MEM_SIZE) mem[OS_STATUS] |= 0x1;
+    else mem[OS_STATUS] &= (uint16_t)~0x1;
 
     return 1;   
 }
 
 void loadProc(uint16_t pid) {
-
+    uint16_t paddr = pcb_addr(pid);
+    mem[Cur_Proc_ID] = pid;
+    reg[RPC] = mem[paddr + PCB_PC];
+    reg[PTBR] = mem[paddr + PCB_PTBR];
 }
 
 int freeMem (uint16_t ptr) {
-    
-    return 0;
+    return freeMem_impl(ptr, reg[PTBR]);
 }
 
 uint16_t allocMem (uint16_t size) {
-    return 0;
+    return allocMem_impl(reg[PTBR], size, UINT16_MAX, UINT16_MAX);
 } 
 
 // instructions to implement
 static inline void tbrk() {
-    
+    uint16_t cur = mem[Cur_Proc_ID];
+    uint16_t req = reg[R0];
+    uint16_t vpn = (req >> 11) & 0x1F;
+    uint16_t is_alloc = req & 0x1;
+    uint16_t read = (req & 0x2) ? UINT16_MAX : 0;
+    uint16_t write = (req & 0x4) ? UINT16_MAX : 0;
+
+    if (vpn < 8) {
+        fprintf(stdout, "Cannot allocate/free memory for the reserved segment.\n");
+        thalt();
+        return;
+    }
+
+    if (is_alloc) {
+        fprintf(stdout, "Heap increase requested by process %hu.\n", cur);
+        uint16_t pte = pte_get(reg[PTBR], vpn);
+        if (pte_valid(pte)) {
+            fprintf(stdout, "Cannot allocate memory for page %hu of pid %hu since it is already allocated.\n", vpn, cur);
+            return;
+        }
+        if (!has_any_free_pfn()) {
+            fprintf(stdout, "Cannot allocate more space for pid %hu since there is no free page frames.\n", cur);
+            return;
+        }
+        (void)allocMem_impl(reg[PTBR], vpn, read, write);
+    } else {
+        fprintf(stdout, "Heap decrease requested by process %hu.\n", cur);
+        if (!freeMem_impl(vpn, reg[PTBR])) {
+            fprintf(stdout, "Cannot free memory of page %hu of pid %hu since it is not allocated.\n", vpn, cur);
+            return;
+        }
+    }
 }
 
 static inline void tyld() {
-
+    uint16_t old = mem[Cur_Proc_ID];
+    int nxt = next_runnable_pid(old);
+    if (nxt < 0 || (uint16_t)nxt == old) {
+        return;
+    }
+    uint16_t old_pcb = pcb_addr(old);
+    mem[old_pcb + PCB_PC] = reg[RPC];
+    mem[old_pcb + PCB_PTBR] = reg[PTBR];
+    loadProc((uint16_t)nxt);
+    fprintf(stdout, "We are switching from process %hu to %hu.\n", old, (uint16_t)nxt);
 }
 
 // instructions to modify
 static inline void thalt() {
-    running = false; 
+    uint16_t cur = mem[Cur_Proc_ID];
+    uint16_t paddr = pcb_addr(cur);
+
+    for (uint16_t vpn = 0; vpn < PT_ENTRIES; ++vpn) {
+        (void)freeMem_impl(vpn, reg[PTBR]);
+    }
+    mem[paddr + PCB_PID] = 0xFFFF;
+
+    int nxt = next_runnable_pid(cur);
+    if (nxt < 0) {
+        running = false;
+        return;
+    }
+    loadProc((uint16_t)nxt);
 } 
 
 static inline uint16_t mr(uint16_t address) {
-    return mem[address];  
+    return mem[resolve_va(address, 0)];
 }
 
 static inline void mw(uint16_t address, uint16_t val) {
-    mem[address] = val;
+    mem[resolve_va(address, 1)] = val;
 }
+
+// Keep compatibility with tests that call allocMem/freeMem with multi-arg signatures.
+#define allocMem(ptbr, vpn, read, write) allocMem_impl((ptbr), (vpn), (read), (write))
+#define freeMem(vpn, ptbr) freeMem_impl((vpn), (ptbr))
 
 // YOUR CODE ENDS HERE
