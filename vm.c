@@ -154,7 +154,6 @@ void run(char* code, char* heap) {
 #define PT_REGION_START 4096
 #define PT_ENTRIES 32
 #define MAX_PROCS (PAGE_WORDS / PT_ENTRIES)
-#define RPTBR RBSC
 #define PTBR RBSC
 
 static inline uint16_t pcb_addr(uint16_t pid) { return PCB_START + (pid * PCB_FIELDS); }
@@ -208,7 +207,7 @@ static inline uint16_t resolve_va(uint16_t va, uint16_t for_write) {
         exit(1);
     }
 
-    uint16_t pte = pte_get(reg[RPTBR], vpn);
+    uint16_t pte = pte_get(reg[PTBR], vpn);
     if (!pte_valid(pte)) {
         fprintf(stdout, "Segmentation fault inside free space.\n");
         exit(1);
@@ -340,17 +339,15 @@ void loadProc(uint16_t pid) {
     uint16_t paddr = pcb_addr(pid);
     mem[Cur_Proc_ID] = pid;
     reg[RPC] = mem[paddr + PCB_PC];
-    reg[RPTBR] = mem[paddr + PCB_PTBR];
+    reg[PTBR] = mem[paddr + PCB_PTBR];
 }
 
 int freeMem (uint16_t ptr) {
-    (void)ptr;
-    return 0;
+    return freeMem_impl(ptr, reg[PTBR]);
 }
 
 uint16_t allocMem (uint16_t size) {
-    (void)size;
-    return 0;
+    return allocMem_impl(reg[PTBR], size, UINT16_MAX, UINT16_MAX);
 } 
 
 // instructions to implement
@@ -370,7 +367,7 @@ static inline void tbrk() {
 
     if (is_alloc) {
         fprintf(stdout, "Heap increase requested by process %hu.\n", cur);
-        uint16_t pte = pte_get(reg[RPTBR], vpn);
+        uint16_t pte = pte_get(reg[PTBR], vpn);
         if (pte_valid(pte)) {
             fprintf(stdout, "Cannot allocate memory for page %hu of pid %hu since it is already allocated.\n", vpn, cur);
             return;
@@ -379,10 +376,10 @@ static inline void tbrk() {
             fprintf(stdout, "Cannot allocate more space for pid %hu since there is no free page frames.\n", cur);
             return;
         }
-        (void)allocMem_impl(reg[RPTBR], vpn, read, write);
+        (void)allocMem_impl(reg[PTBR], vpn, read, write);
     } else {
         fprintf(stdout, "Heap decrease requested by process %hu.\n", cur);
-        if (!freeMem_impl(vpn, reg[RPTBR])) {
+        if (!freeMem_impl(vpn, reg[PTBR])) {
             fprintf(stdout, "Cannot free memory of page %hu of pid %hu since it is not allocated.\n", vpn, cur);
             return;
         }
@@ -397,7 +394,7 @@ static inline void tyld() {
     }
     uint16_t old_pcb = pcb_addr(old);
     mem[old_pcb + PCB_PC] = reg[RPC];
-    mem[old_pcb + PCB_PTBR] = reg[RPTBR];
+    mem[old_pcb + PCB_PTBR] = reg[PTBR];
     loadProc((uint16_t)nxt);
     fprintf(stdout, "We are switching from process %hu to %hu.\n", old, (uint16_t)nxt);
 }
@@ -408,7 +405,7 @@ static inline void thalt() {
     uint16_t paddr = pcb_addr(cur);
 
     for (uint16_t vpn = 0; vpn < PT_ENTRIES; ++vpn) {
-        (void)freeMem_impl(vpn, reg[RPTBR]);
+        (void)freeMem_impl(vpn, reg[PTBR]);
     }
     mem[paddr + PCB_PID] = 0xFFFF;
 
